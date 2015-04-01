@@ -33,7 +33,6 @@ from config import (
 )
 from daemon import AgentSupervisor, Daemon
 from emitter import http_emitter
-from jmxfetch import JMXFetch
 from util import (
     EC2,
     get_hostname,
@@ -316,7 +315,18 @@ def main():
         configcheck()
 
     elif 'jmx' == command:
-        from jmxfetch import JMX_LIST_COMMANDS, JMXFetch
+        # Custom load needed by the Mac Agent
+        import imp
+        import inspect
+        jmxfetch_module = imp.load_source('jmxfetch', os.path.join(
+            os.path.dirname(os.path.realpath(__file__)),
+            'jmxfetch.py'
+        ))
+        for name, content in inspect.getmembers(jmxfetch_module):
+            if name == 'JMX_LIST_COMMANDS':
+                JMX_LIST_COMMANDS = content
+            elif name == 'JMXFetch':
+                JMXFetch = content
 
         if len(args) < 2 or args[1] not in JMX_LIST_COMMANDS.keys():
             print "#" * 80
