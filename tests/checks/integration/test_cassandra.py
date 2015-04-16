@@ -4,7 +4,6 @@ from nose.plugins.attrib import attr
 import threading
 from aggregator import MetricsAggregator
 from dogstatsd import Server
-from util import PidFile
 from jmxfetch import JMXFetch
 from tests.checks.common import Fixtures
 STATSD_PORT = 8121
@@ -36,7 +35,6 @@ class JMXTestCase(unittest.TestCase):
     def setUp(self):
         aggregator = MetricsAggregator("test_host")
         self.server = Server(aggregator, "localhost", STATSD_PORT)
-        pid_file = PidFile('dogstatsd')
         self.reporter = DummyReporter(aggregator)
 
         self.t1 = threading.Thread(target=self.server.start)

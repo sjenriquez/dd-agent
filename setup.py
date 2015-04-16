@@ -144,7 +144,6 @@ elif sys.platform == 'darwin':
             'dogstream',
             'images',
             'status.html',
-            'utils',
         ],
         'options': {
             'py2app': {
