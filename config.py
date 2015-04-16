@@ -117,26 +117,6 @@ def skip_leading_wsp(f):
     return StringIO("\n".join(map(string.strip, f.readlines())))
 
 
-def _windows_commondata_path():
-    """Return the common appdata path, using ctypes
-    From http://stackoverflow.com/questions/626796/\
-    how-do-i-find-the-windows-common-application-data-folder-using-python
-    """
-    import ctypes
-    from ctypes import wintypes, windll
-
-    CSIDL_COMMON_APPDATA = 35
-
-    _SHGetFolderPath = windll.shell32.SHGetFolderPathW
-    _SHGetFolderPath.argtypes = [wintypes.HWND,
-                                ctypes.c_int,
-                                wintypes.HANDLE,
-                                wintypes.DWORD, wintypes.LPCWSTR]
-
-    path_buf = wintypes.create_unicode_buffer(wintypes.MAX_PATH)
-    result = _SHGetFolderPath(0, CSIDL_COMMON_APPDATA, 0, 0, path_buf)
-    return path_buf.value
-
 
 def _windows_config_path():
     common_data = _windows_commondata_path()
@@ -298,9 +278,6 @@ def get_config(parse_args=True, cfg_path=None, options=None):
 
     # General config
     agentConfig = {
-        'check_freq': DEFAULT_CHECK_FREQUENCY,
-        'dogstatsd_port': 8125,
-        'dogstatsd_target': 'http://localhost:17123',
         'graphite_listen_port': None,
         'hostname': None,
         'listen_port': None,
@@ -308,10 +285,7 @@ def get_config(parse_args=True, cfg_path=None, options=None):
         'use_ec2_instance_id': False,  # DEPRECATED
         'version': get_version(),
         'watchdog': True,
-        'additional_checksd': '/etc/dd-agent/checks.d/',
         'bind_host': get_default_bind_host(),
-        'statsd_metric_namespace': None,
-        'utf8_decoding': False
     }
 
     # Config handling
@@ -334,87 +308,7 @@ def get_config(parse_args=True, cfg_path=None, options=None):
 
         # FIXME unnecessarily complex
 
-        if config.has_option('Main', 'use_dd'):
-            agentConfig['use_dd'] = config.get('Main', 'use_dd').lower() in ("yes", "true")
-        else:
-            agentConfig['use_dd'] = True
 
-        agentConfig['use_forwarder'] = False
-        if options is not None and options.use_forwarder:
-            listen_port = 17123
-            if config.has_option('Main', 'listen_port'):
-                listen_port = int(config.get('Main', 'listen_port'))
-            agentConfig['dd_url'] = "http://" + agentConfig['bind_host'] + ":" + str(listen_port)
-            agentConfig['use_forwarder'] = True
-        elif options is not None and not options.disable_dd and options.dd_url:
-            agentConfig['dd_url'] = options.dd_url
-        else:
-            agentConfig['dd_url'] = config.get('Main', 'dd_url')
-        if agentConfig['dd_url'].endswith('/'):
-            agentConfig['dd_url'] = agentConfig['dd_url'][:-1]
-
-        # Extra checks.d path
-        # the linux directory is set by default
-        if config.has_option('Main', 'additional_checksd'):
-            agentConfig['additional_checksd'] = config.get('Main', 'additional_checksd')
-        elif get_os() == 'windows':
-            # default windows location
-            common_path = _windows_commondata_path()
-            agentConfig['additional_checksd'] = os.path.join(common_path, 'Datadog', 'checks.d')
-
-        if config.has_option('Main', 'use_dogstatsd'):
-            agentConfig['use_dogstatsd'] = config.get('Main', 'use_dogstatsd').lower() in ("yes", "true")
-        else:
-            agentConfig['use_dogstatsd'] = True
-
-        # Concerns only Windows
-        if config.has_option('Main', 'use_web_info_page'):
-            agentConfig['use_web_info_page'] = config.get('Main', 'use_web_info_page').lower() in ("yes", "true")
-        else:
-            agentConfig['use_web_info_page'] = True
-
-        if not agentConfig['use_dd']:
-            sys.stderr.write("Please specify at least one endpoint to send metrics to. This can be done in datadog.conf.")
-            exit(2)
-
-        # Which API key to use
-        agentConfig['api_key'] = config.get('Main', 'api_key')
-
-        # local traffic only? Default to no
-        agentConfig['non_local_traffic'] = False
-        if config.has_option('Main', 'non_local_traffic'):
-            agentConfig['non_local_traffic'] = config.get('Main', 'non_local_traffic').lower() in ("yes", "true")
-
-        # DEPRECATED
-        if config.has_option('Main', 'use_ec2_instance_id'):
-            use_ec2_instance_id = config.get('Main', 'use_ec2_instance_id')
-            # translate yes into True, the rest into False
-            agentConfig['use_ec2_instance_id'] = (use_ec2_instance_id.lower() == 'yes')
-
-        if config.has_option('Main', 'check_freq'):
-            try:
-                agentConfig['check_freq'] = int(config.get('Main', 'check_freq'))
-            except Exception:
-                pass
-
-        # Custom histogram aggregate/percentile metrics
-        if config.has_option('Main', 'histogram_aggregates'):
-            agentConfig['histogram_aggregates'] = get_histogram_aggregates(config.get('Main', 'histogram_aggregates'))
-
-        if config.has_option('Main', 'histogram_percentiles'):
-            agentConfig['histogram_percentiles'] = get_histogram_percentiles(config.get('Main', 'histogram_percentiles'))
-
-        # Disable Watchdog (optionally)
-        if config.has_option('Main', 'watchdog'):
-            if config.get('Main', 'watchdog').lower() in ('no', 'false'):
-                agentConfig['watchdog'] = False
-
-        # Optional graphite listener
-        if config.has_option('Main', 'graphite_listen_port'):
-            agentConfig['graphite_listen_port'] = \
-                int(config.get('Main', 'graphite_listen_port'))
-        else:
-            agentConfig['graphite_listen_port'] = None
 
         # Dogstatsd config
         dogstatsd_defaults = {
@@ -427,15 +321,10 @@ def get_config(parse_args=True, cfg_path=None, options=None):
             else:
                 agentConfig[key] = value
 
-        #Forwarding to external statsd server
-        if config.has_option('Main', 'statsd_forward_host'):
-            agentConfig['statsd_forward_host'] = config.get('Main', 'statsd_forward_host')
-            if config.has_option('Main', 'statsd_forward_port'):
-                agentConfig['statsd_forward_port'] = int(config.get('Main', 'statsd_forward_port'))
 
         # optionally send dogstatsd data directly to the agent.
         if config.has_option('Main', 'dogstatsd_use_ddurl'):
-            if  _is_affirmative(config.get('Main', 'dogstatsd_use_ddurl')):
+            if _is_affirmative(config.get('Main', 'dogstatsd_use_ddurl')):
                 agentConfig['dogstatsd_target'] = agentConfig['dd_url']
 
         # Optional config
