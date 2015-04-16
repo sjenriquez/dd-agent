@@ -5,7 +5,7 @@ import sys
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__file__)
 
-from util import Platform
+from utils.platform import Platform
 from checks.system.unix import *
 from tests.checks.common import get_check
 from config import get_system_stats
