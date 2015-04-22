@@ -28,6 +28,7 @@ log = logging.getLogger(__name__)
 
 FLUSH_LOGGING_PERIOD = 10
 FLUSH_LOGGING_INITIAL = 5
+AGENT_METRICS_CHECK = 'agent_metrics'
 
 class Collector(object):
     """
@@ -93,12 +94,6 @@ class Collector(object):
         self._dogstream = Dogstreams.init(log, self.agentConfig)
         self._ddforwarder = DdForwarder(log, self.agentConfig)
 
-        # Agent Metrics
-        self._agent_metrics = AgentMetrics('agent_metrics',
-                                           init_config={},
-                                           agentConfig=agentConfig,
-                                           instances=[])
-
         self._metrics_checks = []
 
         # Custom metric checks
@@ -147,6 +142,13 @@ class Collector(object):
         if checksd:
             self.initialized_checks_d = checksd['initialized_checks'] # is of type {check_name: check}
             self.init_failed_checks_d = checksd['init_failed_checks'] # is of type {check_name: {error, traceback}}
+            for ch in self.initialized_checks_d:
+                if ch.name == 'agent_metrics':
+                    self._agent_metrics = ch
+                    break
+            else:
+                self._agent_metrics = None
+
         # Run the system checks. Checks will depend on the OS
         if self.os == 'windows':
             # Win32 system checks
@@ -365,21 +367,23 @@ class Collector(object):
         collect_duration = timer.step()
 
         if self.os != 'windows':
-            self._agent_metrics.set_metric_context(payload, {
-                    'collection_time': collect_duration,
-                    'emit_time': self.emit_duration,
-                    'cpu_time': time.clock() - cpu_clock
-                })
+            if self._agent_metrics is not None:
+                self._agent_metrics.set_metric_context(payload, {
+                        'collection_time': collect_duration,
+                        'emit_time': self.emit_duration,
+                        'cpu_time': time.clock() - cpu_clock
+                    })
 
-            self._agent_metrics.check(None)
-            payload['metrics'].extend(self._agent_metrics.get_metrics())
+                self._agent_metrics.check(None)
+                payload['metrics'].extend(self._agent_metrics.get_metrics())
         else:
-            self._agent_metrics.set_metric_context(payload, {
-                    'collection_time': collect_duration,
-                    'emit_time': self.emit_duration,
-                })
-            self._agent_metrics.check(None)
-            payload['metrics'].extend(self._agent_metrics.get_metrics())
+            if self._agent_metrics is not None:
+                self._agent_metrics.set_metric_context(payload, {
+                        'collection_time': collect_duration,
+                        'emit_time': self.emit_duration,
+                    })
+                self._agent_metrics.check(None)
+                payload['metrics'].extend(self._agent_metrics.get_metrics())
 
 
         emitter_statuses = self._emit(payload)
