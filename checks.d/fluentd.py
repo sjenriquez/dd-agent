@@ -10,6 +10,7 @@ from checks import AgentCheck
 import simplejson as json
 import requests
 
+
 class Fluentd(AgentCheck):
     SERVICE_CHECK_NAME = 'fluentd.is_ok'
     GAUGES = ['retry_count', 'buffer_total_queued_size', 'buffer_queue_length']

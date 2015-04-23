@@ -1,73 +1,55 @@
-import unittest
-import logging
 from nose.plugins.attrib import attr
-logger = logging.getLogger(__file__)
 
-from tests.common import load_check
+from checks import AgentCheck
+from tests.common import AgentCheckTest
+
 
 @attr(requires='fluentd')
-class TestFluentd(unittest.TestCase):
+class TestFluentd(AgentCheckTest):
+    CHECK_NAME = 'fluentd'
+    CHECK_GAUGES = ['retry_count', 'buffer_total_queued_size', 'buffer_queue_length']
 
-    def test_fluentd(self):
-        config = {
-            "init_config": {
-            },
+    def __init__(self, *args, **kwargs):
+        AgentCheckTest.__init__(self, *args, **kwargs)
+        self.config = {
             "instances": [
                 {
                     "monitor_agent_url": "http://localhost:24220/api/plugins.json",
-                    "plugin_ids": [ "plg1" ],
+                    "plugin_ids": ["plg1"],
                 }
             ]
         }
 
-        agentConfig = {
+        self.agentConfig = {
             'version': '0.1',
             'api_key': 'toto'
         }
 
-        check = load_check('fluentd', config, agentConfig)
-        check.run()
-        metrics = check.get_metrics()
-        for m in metrics:
-            if m[0] == 'fluentd.forward.retry_count':
-                self.assertEquals(m[2], 0)
-            elif m[0] == 'fluentd.forward.buffer_queue_length':
-                self.assertEquals(m[2], 0)
-            elif m[0] == 'fluentd.forward.buffer_total_queued_size':
+    def test_fluentd(self):
+        self.run_check(self.config, agent_config=self.agentConfig)
+        self.assertServiceCheckOK(self.check.SERVICE_CHECK_NAME,
+                                  tags=['fluentd_host:localhost', 'fluentd_port:24220'])
+        for m in self.metrics:
+            if m[0] in self.CHECK_GAUGES:
                 self.assertEquals(m[2], 0)
             self.assertEquals(m[3]['type'], 'gauge')
             self.assertEquals(m[3]['tags'], ['plugin_id:plg1'])
 
-        self.assertEquals(len(metrics), 3, metrics)
+        self.assertEquals(len(self.metrics), 3)
 
-        service_checks = check.get_service_checks()
-        service_checks_count = len(service_checks)
-        self.assertTrue(type(service_checks) == type([]))
+        service_checks_count = len(self.service_checks)
+        self.assertTrue(isinstance(self.service_checks, list))
         self.assertTrue(service_checks_count > 0)
 
-        is_ok = [sc for sc in service_checks if sc['check'] == check.SERVICE_CHECK_NAME]
-        self.assertEquals(len(is_ok), 1, service_checks)
-        self.assertEquals(set(is_ok[0]['tags']), set(['fluentd_host:localhost', 'fluentd_port:24220']), service_checks)
+        is_ok = [sc for sc in self.service_checks if sc['check'] == self.check.SERVICE_CHECK_NAME]
+        self.assertEquals(len(is_ok), 1)
+        self.assertEquals(
+            set(is_ok[0]['tags']), set(['fluentd_host:localhost', 'fluentd_port:24220']))
 
     def test_fluentd_exception(self):
-        config = {
-            "init_config": {
-            },
-            "instances": [
-                {
-                    "monitor_agent_url": "http://localhost:24222/api/plugins.json",
-                    "plugin_ids": [ "plg2" ],
-                }
-            ]
-        }
+        self.assertRaises(Exception, lambda: self.run_check({"instances": [{
+            "monitor_agent_url": "http://localhost:24222/api/plugins.json",
+            "plugin_ids": ["plg2"]}]}))
 
-        agentConfig = {
-            'version': '0.1',
-            'api_key': 'toto'
-        }
-
-        check = load_check('fluentd', config, agentConfig)
-        self.assertRaises(Exception, check.run())
-
-if __name__ == '__main__':
-    unittest.main()
+        self.assertServiceCheckCritical(self.check.SERVICE_CHECK_NAME,
+                                        tags=['fluentd_host:localhost', 'fluentd_port:24222'])
