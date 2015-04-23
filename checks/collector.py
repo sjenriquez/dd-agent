@@ -16,7 +16,6 @@ from config import get_version, get_system_stats
 import checks.system.unix as u
 import checks.system.win32 as w32
 from checks import create_service_check, AgentCheck
-from checks.agent_metrics import CollectorMetrics, AgentMetrics
 from checks.ganglia import Ganglia
 from checks.datadog import Dogstreams, DdForwarder
 from checks.check_status import CheckStatus, CollectorStatus, EmitterStatus, STATUS_OK, STATUS_ERROR
@@ -28,7 +27,6 @@ log = logging.getLogger(__name__)
 
 FLUSH_LOGGING_PERIOD = 10
 FLUSH_LOGGING_INITIAL = 5
-AGENT_METRICS_CHECK = 'agent_metrics'
 
 class Collector(object):
     """
