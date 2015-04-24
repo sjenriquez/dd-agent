@@ -378,7 +378,11 @@ class Collector(object):
                         'cpu_time': time.clock() - cpu_clock
                     })
                 self._agent_metrics.run()
-                payload['metrics'].extend(self._agent_metrics.get_metrics())
+                agent_stats = self._agent_metrics.get_metrics()
+                payload['metrics'].extend(agent_stats)
+                # Dump the metrics to log when in developer mode
+                if self.agentConfig.get('developer_mode', False):
+                    log.info("AGENT STATS: \n {}".format(agent_stats))
         else:
             if self._agent_metrics is not None:
                 self._agent_metrics.set_metric_context(payload, {
@@ -386,8 +390,11 @@ class Collector(object):
                         'emit_time': self.emit_duration,
                     })
                 self._agent_metrics.run()
-                payload['metrics'].extend(self._agent_metrics.get_metrics())
-
+                agent_stats = self._agent_metrics.get_metrics()
+                payload['metrics'].extend(agent_stats)
+                # Dump the metrics to log when in developer mode
+                if self.agentConfig.get('developer_mode', False):
+                    log.info("AGENT STATS: \n {}".format(agent_stats))
 
         emitter_statuses = self._emit(payload)
         self.emit_duration = timer.step()
