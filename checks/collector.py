@@ -7,6 +7,7 @@ import sys
 import time
 import datetime
 import socket
+import pprint
 
 import modules
 
@@ -125,6 +126,10 @@ class Collector(object):
         self.continue_running = False
         for check in self.initialized_checks_d:
             check.stop()
+
+    @staticmethod
+    def _stats_for_display(raw_stats):
+        return pprint.pformat(raw_stats, indent=4)
 
     def run(self, checksd=None, start_event=True):
         """
@@ -390,7 +395,7 @@ class Collector(object):
                 payload['metrics'].extend(agent_stats)
                 # Dump the metrics to log when in developer mode
                 if self.agentConfig.get('developer_mode', False):
-                    log.info("AGENT STATS: \n {0}".format(agent_stats))
+                    log.info("\n AGENT STATS: \n {0}".format(Collector._stats_for_display(agent_stats)))
         else:
             if self._agent_metrics is not None:
                 self._agent_metrics.set_metric_context(payload, {
@@ -402,7 +407,7 @@ class Collector(object):
                 payload['metrics'].extend(agent_stats)
                 # Dump the metrics to log when in developer mode
                 if self.agentConfig.get('developer_mode', False):
-                    log.info("AGENT STATS: \n {0}".format(agent_stats))
+                    log.info("\n AGENT STATS: \n {0}".format(Collector._stats_for_display(agent_stats)))
 
         emitter_statuses = self._emit(payload)
         self.emit_duration = timer.step()
