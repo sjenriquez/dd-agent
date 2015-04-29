@@ -73,7 +73,8 @@ from config import (
     get_logging_config,
     get_version
 )
-from util import get_os, yLoader
+from util import yLoader
+from utils.platform import Platform
 
 # 3rd Party
 import yaml
@@ -87,7 +88,7 @@ AGENT_STOPPED = 3
 AGENT_UNKNOWN = 4
 
 # Import Windows stuff only on Windows
-if get_os() == 'windows':
+if Platform.is_windows():
     import win32serviceutil
     import win32service
     WIN_STATUS_TO_AGENT = {
@@ -130,11 +131,11 @@ OPEN_LOG = "Open log file"
 
 def get_checks():
     checks = {}
-    conf_d_directory = get_confd_path(get_os())
+    conf_d_directory = get_confd_path()
 
     for filename in sorted(os.listdir(conf_d_directory)):
         module_name, ext = osp.splitext(filename)
-        if get_os() == 'windows':
+        if Platform.is_windows():
             excluded_checks = EXCLUDED_WINDOWS_CHECKS
         else:
             excluded_checks = EXCLUDED_MAC_CHECKS
@@ -383,18 +384,10 @@ class HTMLWindow(QTextEdit):
 
 class MainWindow(QSplitter):
     def __init__(self, parent=None):
-        current_os = get_os()
         prefix_conf = ''
 
-        if current_os == 'windows':
+        if Platform.is_windows():
             prefix_conf = 'windows_'
-        else:
-            add_image_path(osp.join(os.getcwd(), 'images'))
-            # add datadog-agent in PATH
-            os.environ['PATH'] = "{0}:{1}".format(
-                osp.join(os.getcwd(), '../MacOS'),
-                os.environ['PATH']
-            )
 
         log_conf = get_logging_config()
 
@@ -679,14 +672,14 @@ def osx_manager_status():
 
 
 def agent_status():
-    if get_os() == 'windows':
+    if Platform.is_windows():
         return service_manager_status()
     else:
         return osx_manager_status()
 
 
 def agent_manager(action, async=True):
-    if get_os() == 'windows':
+    if Platform.is_windows():
         manager = service_manager
     else:
         manager = osx_manager
@@ -704,24 +697,17 @@ def info_popup(message, parent=None):
     QMessageBox.information(parent, 'Message', message, QMessageBox.Ok)
 
 
-class AgentManagerApp(QApplication):
-    def __init__(self):
-        QApplication.__init__(self, [])
-        QApplication.setQuitOnLastWindowClosed(False)
-        self.main_window = None
-
-    def event(self, e):
-        if e.type() == QEvent.Type.ApplicationActivate:
-            self.main_window.show()
-        return QApplication.event(self, e)
-
-    def set_main_window(self, main_window):
-        self.main_window = main_window
-
-
 if __name__ == '__main__':
-    app = AgentManagerApp()
-    win = MainWindow()
-    app.set_main_window(win)
+    app = QApplication([])
+    if Platform.is_mac():
+        add_image_path(osp.join(os.getcwd(), 'images'))
+        # add datadog-agent in PATH
+        os.environ['PATH'] = "{0}:{1}".format(
+            osp.join(os.getcwd(), '../MacOS'),
+            os.environ['PATH']
+        )
+        win = SystemTray() if len(sys.argv) < 2 else MainWindow()
+    else:
+        win = MainWindow()
     win.show()
     app.exec_()
