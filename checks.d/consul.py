@@ -14,10 +14,15 @@ Number of services running per node - /v1/catalog/node/<node>
 class ConsulCheck(AgentCheck):
     CONSUL_CHECK = 'consul.up'
     HEALTH_CHECK = 'consul.check'
+    CONSUL_CATALOG_CHECK = 'consul.catalog'
 
     def consul_request(self, instance, endpoint):
         url = "{}{}".format(instance.get('url'), endpoint)
-        resp = requests.get(url)
+        try:
+            resp = requests.get(url)
+        except requests.exceptions.Timeout:
+            self.log.exception('Consul request to {0} timed out'.format(url))
+            raise
 
         resp.raise_for_status()
         return resp.json()
@@ -35,9 +40,18 @@ class ConsulCheck(AgentCheck):
         except Exception as e:
             return False
 
+    # Problem these are all blocking HTTP requests and will, they should not be
     def get_services_in_cluster(self, instance):
-        services = self.consul_request(instance, '/v1/catalog/services')
-        return services
+        return self.consul_request(instance, '/v1/catalog/services')
+
+    def get_nodes_in_cluster(self, instance):
+        return self.consul_request(instance, '/v1/catalog/nodes')
+
+    def get_nodes_with_service(self, instance, service):
+        return self.consul_request(instance, '/v1/catalog/service/{0}'.format(service))
+
+    def get_services_on_node(self, instance, node):
+        return self.consul_request(instance, '/v1/catalog/node/{0}'.format(node))
 
     def check(self, instance):
         if not self.should_check(instance):
@@ -45,9 +59,15 @@ class ConsulCheck(AgentCheck):
             return
 
         service_check_tags = ['consul_url:{}'.format(instance.get('url'))]
+        perform_catalog_checks = instance.get('perform_catalog_checks',
+                                              self.init_config.get('perform_catalog_checks'))
+
+
+        global_catalog_check = perform_catalog_checks.get('global')
+        services_to_check = perform_catalog_checks.get('services')
+        nodes_to_check = perform_catalog_checks.get('nodes')
 
         try:
-
             health_state = self.consul_request(instance, '/v1/health/state/any')
 
             STATUS_SC = {
@@ -76,3 +96,23 @@ class ConsulCheck(AgentCheck):
         else:
             self.service_check(self.CONSUL_CHECK, AgentCheck.OK,
                                tags=service_check_tags)
+
+        if perform_catalog_checks:
+            if global_catalog_check:
+                services = self.get_services_in_cluster(instance)
+                self.gauge('{0}.services_up'.format(self.CONSUL_CATALOG_CHECK), services)
+
+                nodes = self.get_nodes_in_cluster(instance)
+                self.gauge('{0}.nodes_up'.format(self.CONSUL_CATALOG_CHECK), nodes)
+
+            if services_to_check:
+                for s in services_to_check:
+                    nodes_providing_s = self.get_nodes_with_service(instance, s)
+                    metric_key = '{0}.{1}.nodes_up'.format(self.CONSUL_CATALOG_CHECK, s)
+                    self.gauge(metric_key, nodes_providing_s)
+
+            if nodes_to_check:
+                for n in nodes_to_check:
+                    services_provided_on_n = self.get_services_on_node(instance, n)
+                    metric_key = '{0}.{1}.services_up'.format(self.CONSUL_CATALOG_CHECK, n)
+                    self.gauge(metric_key, services_provided_on_n)
