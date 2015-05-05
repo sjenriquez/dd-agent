@@ -36,6 +36,10 @@ class ConsulCheck(AgentCheck):
             agent_port = local_config.get('Config', {}).get('Ports', {}).get('Server')
             agent_url = "{}:{}".format(agent_addr, agent_port)
 
+
+            agent_dc = local_config.get('Config', {}).get('Datacenter')
+            self.agent_dc = agent_dc
+
             leader = self.consul_request(instance, '/v1/status/leader')
             return agent_url == leader
 
@@ -109,9 +113,13 @@ class ConsulCheck(AgentCheck):
                 services = self.get_services_in_cluster(instance)
                 # Count all nodes providing each service
                 # Tag them with the service name appending service tags if they exist
+                main_tags = []
+
+                if hasattr(self, 'agent_dc') and self.agent_dc:
+                    main_tags.append('consul_datacenter:{0}'.format(self.agent_dc))
 
                 for k,v in services.items():
-                    main_tags = ['consul_service_id:{0}'.format(k)]
+                    main_tags.append('consul_service_id:{0}'.format(k))
 
                     if len(v) > 0:
                         for service_tag in v:
@@ -125,12 +133,6 @@ class ConsulCheck(AgentCheck):
                         self.gauge('{0}.nodes_up'.format(self.CONSUL_CATALOG_CHECK),
                                    len(nodes_providing_s),
                                    tags=main_tags)
-
-            if services_to_check:
-                for s in services_to_check:
-                    nodes_providing_s = self.get_nodes_with_service(instance, s)
-                    metric_key = '{0}.{1}.nodes_up'.format(self.CONSUL_CATALOG_CHECK, s)
-                    self.gauge(metric_key, len(nodes_providing_s))
 
             if nodes_to_check:
                 for n in nodes_to_check:
