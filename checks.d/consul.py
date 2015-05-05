@@ -14,7 +14,9 @@ Number of services running per node - /v1/catalog/node/<node>
 class ConsulCheck(AgentCheck):
     CONSUL_CHECK = 'consul.up'
     HEALTH_CHECK = 'consul.check'
+
     CONSUL_CATALOG_CHECK = 'consul.catalog'
+    CONSUL_NODE_CHECK = 'consul.node'
 
     def consul_request(self, instance, endpoint):
         url = "{}{}".format(instance.get('url'), endpoint)
@@ -100,19 +102,19 @@ class ConsulCheck(AgentCheck):
         if perform_catalog_checks:
             if global_catalog_check:
                 services = self.get_services_in_cluster(instance)
-                self.gauge('{0}.services_up'.format(self.CONSUL_CATALOG_CHECK), services)
+                self.gauge('{0}.services_up'.format(self.CONSUL_CATALOG_CHECK), len(services))
 
                 nodes = self.get_nodes_in_cluster(instance)
-                self.gauge('{0}.nodes_up'.format(self.CONSUL_CATALOG_CHECK), nodes)
+                self.gauge('{0}.nodes_up'.format(self.CONSUL_CATALOG_CHECK), len(nodes))
 
             if services_to_check:
                 for s in services_to_check:
                     nodes_providing_s = self.get_nodes_with_service(instance, s)
                     metric_key = '{0}.{1}.nodes_up'.format(self.CONSUL_CATALOG_CHECK, s)
-                    self.gauge(metric_key, nodes_providing_s)
+                    self.gauge(metric_key, len(nodes_providing_s))
 
             if nodes_to_check:
                 for n in nodes_to_check:
                     services_provided_on_n = self.get_services_on_node(instance, n)
-                    metric_key = '{0}.{1}.services_up'.format(self.CONSUL_CATALOG_CHECK, n)
-                    self.gauge(metric_key, services_provided_on_n)
+                    metric_key = '{0}.services_up'.format(self.CONSUL_NODE_CHECK)
+                    self.gauge(metric_key, len(services_provided_on_n))
