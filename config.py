@@ -57,6 +57,8 @@ NAGIOS_OLD_CONF_KEYS = [
     ]
 
 DEFAULT_CHECKS = ("network", "ntp")
+NEW_SYSTEM_CHECKS = ('disk')
+
 LEGACY_DATADOG_URLS = [
     "app.datadoghq.com",
     "app.datad0g.com",
@@ -751,6 +753,7 @@ def check_yaml(conf_path):
     finally:
         f.close()
 
+
 def load_check_directory(agentConfig, hostname):
     ''' Return the initialized checks from checks.d, and a mapping of checks that failed to
     initialize. Only checks that have a configuration
@@ -800,7 +803,9 @@ def load_check_directory(agentConfig, hostname):
 
         # Default checks are checks that are enabled by default
         # They read their config from the "[CHECKNAME].yaml.default" file
-        if check_name in DEFAULT_CHECKS:
+        # FIXME: 6.x, put NEW_SYSTEM_CHECKS into real DEFAUT_CHECKS
+        if check_name in DEFAULT_CHECKS or (check_name in NEW_SYSTEM_CHECKS and
+                                            _is_affirmative(agentConfig.get('new_gen_{0}_check'.format(check_name), ''))):
             default_conf_path = os.path.join(confd_path, '%s.yaml.default' % check_name)
         else:
             default_conf_path = None
@@ -818,18 +823,17 @@ def load_check_directory(agentConfig, hostname):
             conf_exists = True
 
         if conf_exists:
-            f = open(conf_path)
             try:
                 check_config = check_yaml(conf_path)
             except Exception, e:
                 log.exception("Unable to parse yaml config in %s" % conf_path)
                 traceback_message = traceback.format_exc()
-                init_failed_checks[check_name] = {'error':str(e), 'traceback':traceback_message}
+                init_failed_checks[check_name] = {'error': str(e), 'traceback': traceback_message}
                 continue
         else:
             # Compatibility code for the Nagios checks if it's still configured
             # in datadog.conf
-            # fixme: Should be removed in ulterior major version
+            # FIXME: 6.x, should be removed
             if check_name == 'nagios':
                 if any([nagios_key in agentConfig for nagios_key in NAGIOS_OLD_CONF_KEYS]):
                     log.warning("Configuring Nagios in datadog.conf is deprecated "

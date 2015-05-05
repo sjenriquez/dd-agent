@@ -10,7 +10,7 @@ dd_url: https://app.datadoghq.com
 # proxy_password: password
 # To be used with some proxys that return a 302 which make curl switch from POST to GET
 # See http://stackoverflow.com/questions/8156073/curl-violate-rfc-2616-10-3-2-and-switch-from-post-to-get
-# proxy_forbid_method_switch: no 
+# proxy_forbid_method_switch: no
 
 # If you run the agent behind haproxy, you might want to set this to yes
 # skip_ssl_validation: no
@@ -129,6 +129,11 @@ use_mount: no
 # interesting for datadog. To filter out a particular pattern of devices
 # from collection, configure a regex here:
 # device_blacklist_re: .*\/dev\/mapper\/lxc-box.*
+#
+# Activate new generation of disk check (disabled by default),
+# with awesome new features
+# See conf.d/disk.yaml.default for more details
+# new_gen_disk_check: no
 
 # -------------------------------------------------------------------------- #
 #   Ganglia                                                                  #
