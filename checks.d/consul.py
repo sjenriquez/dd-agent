@@ -49,8 +49,13 @@ class ConsulCheck(AgentCheck):
     def get_nodes_in_cluster(self, instance):
         return self.consul_request(instance, '/v1/catalog/nodes')
 
-    def get_nodes_with_service(self, instance, service):
-        return self.consul_request(instance, '/v1/catalog/service/{0}'.format(service))
+    def get_nodes_with_service(self, instance, service, tag=None):
+        if tag:
+            consul_request_url = '/v1/catalog/service/{0}?tag={1}'.format(service,tag)
+        else:
+            consul_request_url = '/v1/catalog/service/{0}'.format(service)
+
+        return self.consul_request(instance, consul_request_url)
 
     def get_services_on_node(self, instance, node):
         return self.consul_request(instance, '/v1/catalog/node/{0}'.format(node))
@@ -102,10 +107,24 @@ class ConsulCheck(AgentCheck):
         if perform_catalog_checks:
             if global_catalog_check:
                 services = self.get_services_in_cluster(instance)
-                self.gauge('{0}.services_up'.format(self.CONSUL_CATALOG_CHECK), len(services))
+                # Count all nodes providing each service
+                # Tag them with the service name appending service tags if they exist
 
-                nodes = self.get_nodes_in_cluster(instance)
-                self.gauge('{0}.nodes_up'.format(self.CONSUL_CATALOG_CHECK), len(nodes))
+                for k,v in services.items():
+                    main_tags = ['service:{0}'.format(k)]
+
+                    if len(v) > 0:
+                        for service_tag in v:
+                            tags = main_tags + [ 'service:{0}#{1}'.format(k, service_tag) ]
+                            nodes_providing_s = self.get_nodes_with_service(instance, k, service_tag)
+                            self.gauge('{0}.nodes_up'.format(self.CONSUL_CATALOG_CHECK),
+                                       len(nodes_providing_s),
+                                       tags=tags)
+                    else:
+                        nodes_providing_s = self.get_nodes_with_service(instance, k)
+                        self.gauge('{0}.nodes_up'.format(self.CONSUL_CATALOG_CHECK),
+                                   len(nodes_providing_s),
+                                   tags=main_tags)
 
             if services_to_check:
                 for s in services_to_check:
