@@ -111,15 +111,15 @@ class ConsulCheck(AgentCheck):
                 # Tag them with the service name appending service tags if they exist
 
                 for k,v in services.items():
-                    main_tags = ['service:{0}'.format(k)]
+                    main_tags = ['consul_service_id:{0}'.format(k)]
 
                     if len(v) > 0:
                         for service_tag in v:
-                            tags = main_tags + [ 'service:{0}#{1}'.format(k, service_tag) ]
+                            all_tags = main_tags + [ 'consul_service_tag:{0}'.format(service_tag) ]
                             nodes_providing_s = self.get_nodes_with_service(instance, k, service_tag)
                             self.gauge('{0}.nodes_up'.format(self.CONSUL_CATALOG_CHECK),
                                        len(nodes_providing_s),
-                                       tags=tags)
+                                       tags=all_tags)
                     else:
                         nodes_providing_s = self.get_nodes_with_service(instance, k)
                         self.gauge('{0}.nodes_up'.format(self.CONSUL_CATALOG_CHECK),
