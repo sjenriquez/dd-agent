@@ -11,6 +11,7 @@ from checks import AgentCheck
 
 # 3rd party
 import requests
+from version import Version
 
 
 class MesosSlave(AgentCheck):
@@ -37,14 +38,13 @@ class MesosSlave(AgentCheck):
     }
 
     SLAVE_TASKS_METRICS = {
-        'failed_tasks'                      : ('mesos.slave.failed_tasks', GAUGE),
-        'finished_tasks'                    : ('mesos.slave.finished_tasks', GAUGE),
-        'killed_tasks'                      : ('mesos.slave.killed_tasks', GAUGE),
-        'lost_tasks'                        : ('mesos.slave.lost_tasks', GAUGE),
-        'staged_tasks'                      : ('mesos.slave.staged_tasks', GAUGE),
-        'started_tasks'                     : ('mesos.slave.started_tasks', GAUGE),
-        'launched_tasks_gauge'              : ('mesos.slave.launched_tasks_gauge', GAUGE),
-        'queued_tasks_gauge'                : ('mesos.slave.queued_tasks_gauge', GAUGE),
+        'slave/tasks_failed'                : ('mesos.slave.tasks_failed', GAUGE),
+        'slave/tasks_finished'              : ('mesos.slave.tasks_finished', GAUGE),
+        'slave/tasks_killed'                : ('mesos.slave.tasks_killed', GAUGE),
+        'slave/tasks_lost'                  : ('mesos.slave.tasks_lost', GAUGE),
+        'slave/tasks_running'               : ('mesos.slave.tasks_running', GAUGE),
+        'slave/tasks_staging'               : ('mesos.slave.tasks_staging', GAUGE),
+        'slave/tasks_starting'              : ('mesos.slave.tasks_starting', GAUGE),
     }
 
     SYSTEM_METRICS = {
@@ -78,7 +78,6 @@ class MesosSlave(AgentCheck):
     }
 
     STATS_METRICS = {
-        'total_frameworks'                  : ('mesos.slave.total_frameworks', GAUGE),
         'slave/frameworks_active'           : ('mesos.slave.frameworks_active', GAUGE),
         'slave/invalid_framework_messages'  : ('mesos.slave.invalid_framework_messages', GAUGE),
         'slave/invalid_status_updates'      : ('mesos.slave.invalid_status_updates', GAUGE),
@@ -144,13 +143,18 @@ class MesosSlave(AgentCheck):
         return self._get_json(url + '/state.json', timeout)
 
     def _get_stats(self, url, timeout):
-        return self._get_json(url + '/stats.json', timeout)
+        if self.version >= Version('0.22.0'):
+            endpoint = '/metrics/snapshot'
+        else:
+            endpoint = '/stats.json'
+        return self._get_json(url + endpoint, timeout)
 
     def _get_constant_attributes(self, url, timeout):
         json = None
         if self.cluster_name is None:
             json = self._get_state(url, timeout)
             if json is not None:
+                self.version = Version(json['version'])
                 master_state = self._get_state('http://' + json['master_hostname'] + ':5050', timeout)
                 if master_state is not None:
                     self.cluster_name = master_state['cluster']

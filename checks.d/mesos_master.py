@@ -11,6 +11,7 @@ from checks import AgentCheck
 
 # 3rd party
 import requests
+from version import Version
 
 
 class MesosMaster(AgentCheck):
@@ -34,13 +35,14 @@ class MesosMaster(AgentCheck):
 
     # These metrics are aggregated only on the elected master
     CLUSTER_TASKS_METRICS = {
-        'staged_tasks'                                      : ('mesos.cluster.staged_tasks', GAUGE),
-        'started_tasks'                                     : ('mesos.cluster.started_tasks', GAUGE),
-        'finished_tasks'                                    : ('mesos.cluster.finished_tasks', GAUGE),
-        'killed_tasks'                                      : ('mesos.cluster.killed_tasks', GAUGE),
-        'failed_tasks'                                      : ('mesos.cluster.failed_tasks', GAUGE),
-        'lost_tasks'                                        : ('mesos.cluster.lost_tasks', GAUGE),
-        'active_tasks_gauge'                                : ('mesos.cluster.active_tasks_gauge', GAUGE),
+        'master/tasks_error'                                : ('mesos.cluster.tasks_error', GAUGE),
+        'master/tasks_failed'                               : ('mesos.cluster.tasks_failed', GAUGE),
+        'master/tasks_finished'                             : ('mesos.cluster.tasks_finished', GAUGE),
+        'master/tasks_killed'                               : ('mesos.cluster.tasks_killed', GAUGE),
+        'master/tasks_lost'                                 : ('mesos.cluster.tasks_lost', GAUGE),
+        'master/tasks_running'                              : ('mesos.cluster.tasks_running', GAUGE),
+        'master/tasks_staging'                              : ('mesos.cluster.tasks_staging', GAUGE),
+        'master/tasks_starting'                             : ('mesos.cluster.tasks_starting', GAUGE),
     }
 
     # These metrics are aggregated only on the elected master
@@ -109,9 +111,6 @@ class MesosMaster(AgentCheck):
 
     # These metrics are aggregated only on the elected master
     STATS_METRICS = {
-        'active_schedulers'                                 : ('mesos.cluster.active_schedulers', GAUGE),
-        'total_schedulers'                                  : ('mesos.cluster.total_schedulers', GAUGE),
-        'outstanding_offers'                                : ('mesos.cluster.outstanding_offers', GAUGE),
         'master/dropped_messages'                           : ('mesos.cluster.dropped_messages', GAUGE),
         'master/outstanding_offers'                         : ('mesos.cluster.outstanding_offers', GAUGE),
         'master/event_queue_dispatches'                     : ('mesos.cluster.event_queue_dispatches', GAUGE),
@@ -181,7 +180,11 @@ class MesosMaster(AgentCheck):
         return self._get_json(url + '/state.json', timeout)
 
     def _get_master_stats(self, url, timeout):
-        return self._get_json(url + '/stats.json', timeout)
+        if self.version >= Version('0.22.0'):
+            endpoint = '/metrics/snapshot'
+        else:
+            endpoint = '/stats.json'
+        return self._get_json(url + endpoint, timeout)
 
     def _get_master_roles(self, url, timeout):
         return self._get_json(url + '/roles.json', timeout)
@@ -189,8 +192,10 @@ class MesosMaster(AgentCheck):
     def _check_leadership(self, url, timeout):
         json = self._get_master_state(url, timeout)
 
-        if json is not None and json['leader'] == json['pid']:
-            self.leader = True
+        if json is not None:
+            self.version = Version(json['version'])
+            if json['leader'] == json['pid']:
+                self.leader = True
         else:
             self.leader = False
         return json
