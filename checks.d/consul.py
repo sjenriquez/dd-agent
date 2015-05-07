@@ -73,11 +73,6 @@ class ConsulCheck(AgentCheck):
         perform_catalog_checks = instance.get('perform_catalog_checks',
                                               self.init_config.get('perform_catalog_checks'))
 
-
-        global_catalog_check = perform_catalog_checks.get('global')
-        services_to_check = perform_catalog_checks.get('services')
-        nodes_to_check = perform_catalog_checks.get('nodes')
-
         try:
             health_state = self.consul_request(instance, '/v1/health/state/any')
 
@@ -109,21 +104,32 @@ class ConsulCheck(AgentCheck):
                                tags=service_check_tags)
 
         if perform_catalog_checks:
-            if global_catalog_check:
-                services = self.get_services_in_cluster(instance)
-                # Count all nodes providing each service
-                # Tag them with the service name and service tags if they exist
-                main_tags = []
+            services = self.get_services_in_cluster(instance)
+            # Count all nodes providing each service
+            # Tag them with the service name and service tags if they exist
+            main_tags = []
 
-                if hasattr(self, 'agent_dc') and self.agent_dc:
-                    main_tags.append('consul_datacenter:{0}'.format(self.agent_dc))
+            if hasattr(self, 'agent_dc') and self.agent_dc:
+                main_tags.append('consul_datacenter:{0}'.format(self.agent_dc))
 
-                for service in services:
-                    nodes_with_service = self.get_nodes_with_service(instance, service)
-                    service_level_tags = main_tags + [ 'consul_service_id:{0}'.format(service) ]
+            node_ids = []
+            for service in services:
+                nodes_with_service = self.get_nodes_with_service(instance, service)
+                service_level_tags = main_tags + [ 'consul_service_id:{0}'.format(service) ]
 
-                    for n in nodes_with_service:
-                        service_tags = n.get('ServiceTags') or []
-                        all_tags = service_level_tags +\
-                                [ 'consul_service_tag:{0}'.format(st) for st in service_tags]
-                        self.count('consul.catalog.nodes_up', value=1, tags=all_tags)
+                for n in nodes_with_service:
+                    service_tags = n.get('ServiceTags') or []
+
+                    # Store the node IDs, it'll save us a roundtrip later
+                    node_id = n.get('Node') or None
+                    if node_id not in node_ids:
+                        node_ids.append(node_id)
+
+                    all_tags = service_level_tags +\
+                            [ 'consul_service_tag:{0}'.format(st) for st in service_tags]
+                    self.count('consul.catalog.nodes_up', value=1, tags=all_tags)
+
+            for n in node_ids:
+                services_on_node = self.get_services_on_node(instance, n)
+                node_level_tags = main_tags + [ 'consul_node_id:{0}'.format(n) ]
+                self.count('consul.catalog.services_up', value=1, tags=node_level_tags)
