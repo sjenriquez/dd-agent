@@ -105,31 +105,38 @@ class ConsulCheck(AgentCheck):
 
         if perform_catalog_checks:
             services = self.get_services_in_cluster(instance)
-            # Count all nodes providing each service
-            # Tag them with the service name and service tags if they exist
             main_tags = []
 
             if hasattr(self, 'agent_dc') and self.agent_dc:
                 main_tags.append('consul_datacenter:{0}'.format(self.agent_dc))
 
-            node_ids = []
+            nodes_to_services = {}
+            # Count all nodes providing each service
+            # Tag them with the service name and service tags if they exist
             for service in services:
                 nodes_with_service = self.get_nodes_with_service(instance, service)
                 service_level_tags = main_tags + [ 'consul_service_id:{0}'.format(service) ]
 
                 for n in nodes_with_service:
                     service_tags = n.get('ServiceTags') or []
-
-                    # Store the node IDs, it'll save us a roundtrip later
-                    node_id = n.get('Node') or None
-                    if node_id not in node_ids:
-                        node_ids.append(node_id)
-
                     all_tags = service_level_tags +\
                             [ 'consul_service_tag:{0}'.format(st) for st in service_tags]
+
+                    # Allows to ask something like: How many Nodes provide a given Service?
                     self.count('consul.catalog.nodes_up', value=1, tags=all_tags)
 
-            for n in node_ids:
-                services_on_node = self.get_services_on_node(instance, n)
-                node_level_tags = main_tags + [ 'consul_node_id:{0}'.format(n) ]
-                self.count('consul.catalog.services_up', value=1, tags=node_level_tags)
+                    # Store the services on this node, they'll be useful later
+                    node_id = n.get('Node') or None
+                    if not node_id:
+                        continue
+
+                    if node_id not in nodes_to_services:
+                        nodes_to_services[node_id] = [ service ]
+                    else:
+                        nodes_to_services[node_id].append(service)
+
+            for node, services in nodes_to_services.items():
+                node_level_tags = main_tags + [ 'consul_node_id:{0}'.format(node) ]
+                for service in services:
+                    # Allows to ask something like: How many Services are provided by a given node?
+                    self.count('consul.catalog.services_up', value=1, tags=node_level_tags)
