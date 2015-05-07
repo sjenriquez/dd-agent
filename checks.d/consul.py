@@ -123,6 +123,7 @@ class ConsulCheck(AgentCheck):
                     service_level_tags = main_tags + [ 'consul_service_id:{0}'.format(service) ]
 
                     for n in nodes_with_service:
+                        service_tags = n.get('ServiceTags') or []
                         all_tags = service_level_tags +\
-                                [ 'consul_service_tag:{0}'.format(st) for st in n.get('ServiceTags', [])]
+                                [ 'consul_service_tag:{0}'.format(st) for st in service_tags]
                         self.increment('consul.catalog.nodes_up', tags=all_tags)
