@@ -112,7 +112,7 @@ class ConsulCheck(AgentCheck):
             if global_catalog_check:
                 services = self.get_services_in_cluster(instance)
                 # Count all nodes providing each service
-                # Tag them with the service name appending service tags if they exist
+                # Tag them with the service name and service tags if they exist
                 main_tags = []
 
                 if hasattr(self, 'agent_dc') and self.agent_dc:
@@ -120,14 +120,9 @@ class ConsulCheck(AgentCheck):
 
                 for service in services:
                     nodes_with_service = self.get_nodes_with_service(instance, service)
-                    main_tags.append('consul_service_id:{0}'.format(service))
+                    service_level_tags = main_tags + [ 'consul_service_id:{0}'.format(service) ]
 
                     for n in nodes_with_service:
-                        all_tags = main_tags + [ 'consul_service_tag:{0}'.format(st) for st in n['ServiceTags']]
+                        all_tags = service_level_tags +\
+                                [ 'consul_service_tag:{0}'.format(st) for st in n.get('ServiceTags', [])]
                         self.increment('consul.catalog.nodes_up', tags=all_tags)
-
-            if nodes_to_check:
-                for n in nodes_to_check:
-                    services_provided_on_n = self.get_services_on_node(instance, n)
-                    metric_key = '{0}.services_up'.format(self.CONSUL_NODE_CHECK)
-                    self.gauge(metric_key, len(services_provided_on_n))
