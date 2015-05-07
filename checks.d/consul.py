@@ -118,21 +118,13 @@ class ConsulCheck(AgentCheck):
                 if hasattr(self, 'agent_dc') and self.agent_dc:
                     main_tags.append('consul_datacenter:{0}'.format(self.agent_dc))
 
-                for k,v in services.items():
-                    main_tags.append('consul_service_id:{0}'.format(k))
+                for service in services:
+                    nodes_with_service = self.get_nodes_with_service(instance, service)
+                    main_tags.append('consul_service_id:{0}'.format(service))
 
-                    if len(v) > 0:
-                        for service_tag in v:
-                            all_tags = main_tags + [ 'consul_service_tag:{0}'.format(service_tag) ]
-                            nodes_providing_s = self.get_nodes_with_service(instance, k, service_tag)
-                            self.gauge('{0}.nodes_up'.format(self.CONSUL_CATALOG_CHECK),
-                                       len(nodes_providing_s),
-                                       tags=all_tags)
-                    else:
-                        nodes_providing_s = self.get_nodes_with_service(instance, k)
-                        self.gauge('{0}.nodes_up'.format(self.CONSUL_CATALOG_CHECK),
-                                   len(nodes_providing_s),
-                                   tags=main_tags)
+                    for n in nodes_with_service:
+                        all_tags = main_tags + [ 'consul_service_tag:{0}'.format(st) for st in n['ServiceTags']]
+                        self.increment('consul.catalog.nodes_up', tags=all_tags)
 
             if nodes_to_check:
                 for n in nodes_to_check:
