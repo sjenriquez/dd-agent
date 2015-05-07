@@ -126,4 +126,4 @@ class ConsulCheck(AgentCheck):
                         service_tags = n.get('ServiceTags') or []
                         all_tags = service_level_tags +\
                                 [ 'consul_service_tag:{0}'.format(st) for st in service_tags]
-                        self.increment('consul.catalog.nodes_up', tags=all_tags)
+                        self.count('consul.catalog.nodes_up', value=1, tags=all_tags)
